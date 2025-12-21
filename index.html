@@ -1,0 +1,95 @@
+
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EJN CORPORATE</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@600;700;800;900&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                yellow: '#ffbd00',
+                dark: '#002d26',
+              }
+            },
+            fontFamily: {
+              poppins: ['Poppins', 'sans-serif'],
+              montserrat: ['Montserrat', 'sans-serif'],
+            },
+            fontSize: {
+              'xxs': '0.625rem',  // 10px
+              'xs': '0.75rem',    // 12px
+              'sm': '0.875rem',   // 14px
+              'base': '1rem',     // 16px
+              'lg': '1.125rem',   // 18px
+              'xl': '1.25rem',    // 20px
+            },
+            letterSpacing: {
+              'tighter': '-0.04em',
+              'tight': '-0.02em',
+              'widest': '0.15em',
+              'ultra': '0.25em',
+            }
+          },
+        },
+      }
+    </script>
+    <style>
+        h1, h2, h3, h4, h5, .font-title { 
+          font-family: 'Poppins', sans-serif; 
+          font-weight: 800; 
+          letter-spacing: -0.02em;
+          line-height: 1.1;
+        }
+        body, p, span, label, input, select, textarea, button, .font-subtitle { 
+          font-family: 'Montserrat', sans-serif; 
+          letter-spacing: -0.01em;
+        }
+        
+        /* Ajuste fino para labels em letras maiúsculas */
+        .uppercase-label {
+          text-transform: uppercase;
+          letter-spacing: 0.12em;
+          font-weight: 700;
+        }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; }
+        ::-webkit-scrollbar-thumb { background: #ffbd00; border-radius: 10px; }
+        
+        .bg-brand-gradient {
+            background: linear-gradient(135deg, #002d26 0%, #004d41 100%);
+        }
+
+        /* Suavização de renderização */
+        * {
+          -webkit-font-smoothing: antialiased;
+          -moz-osx-font-smoothing: grayscale;
+        }
+    </style>
+<script type="importmap">
+{
+  "imports": {
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2",
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
+  }
+}
+</script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-montserrat antialiased text-sm overflow-x-hidden">
+    <div id="root"></div>
+    <script type="module" src="/index.tsx"></script>
+</body>
+</html>

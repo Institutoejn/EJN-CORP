@@ -1,0 +1,7 @@
+{
+  "name": "EJN Gamificação Interna",
+  "description": "Plataforma de engajamento e recompensas para colaboradores do Instituto Escola Jovens de Negócios.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
