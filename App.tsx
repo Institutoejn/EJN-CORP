@@ -437,11 +437,12 @@ const CommunityFeed: React.FC<{
   posts: CommunityPost[];
   onLike: (postId: string) => void;
   onComment: (postId: string, text: string) => void;
-  onPost: (content: string, image?: string) => void;
+  onPost: (content: string, imageFile?: File) => void;
   onDelete: (postId: string) => void;
 }> = ({ user, users, posts, onLike, onComment, onPost, onDelete }) => {
   const [newPostText, setNewPostText] = useState('');
-  const [newPostImage, setNewPostImage] = useState<string | undefined>();
+  const [newPostImage, setNewPostImage] = useState<File | undefined>();
+  const [isPosting, setIsPosting] = useState(false);
   const [commentingOn, setCommentingOn] = useState<string | null>(null);
   const [commentText, setCommentText] = useState('');
   const [viewingProfile, setViewingProfile] = useState<User | null>(null);
@@ -450,10 +451,16 @@ const CommunityFeed: React.FC<{
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => setNewPostImage(reader.result as string);
-      reader.readAsDataURL(file);
+      setNewPostImage(file);
     }
+  };
+
+  const handlePostSubmit = async () => {
+    setIsPosting(true);
+    await onPost(newPostText, newPostImage);
+    setNewPostText('');
+    setNewPostImage(undefined);
+    setIsPosting(false);
   };
   
   const handleViewProfile = (userId: string) => {
@@ -490,7 +497,7 @@ const CommunityFeed: React.FC<{
         
         {newPostImage && (
           <div className="relative rounded-2xl overflow-hidden border border-slate-100 group">
-            <img src={newPostImage} className="w-full h-48 object-cover" alt="" />
+            <img src={URL.createObjectURL(newPostImage)} className="w-full h-48 object-cover" alt="Preview" />
             <button onClick={() => setNewPostImage(undefined)} className="absolute top-2 right-2 p-2 bg-brand-dark/80 text-white rounded-xl opacity-0 group-hover:opacity-100 transition-opacity">
               <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
             </button>
@@ -505,10 +512,12 @@ const CommunityFeed: React.FC<{
           <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/*" />
           
           <button 
-            disabled={!newPostText.trim() && !newPostImage}
-            onClick={() => { onPost(newPostText, newPostImage); setNewPostText(''); setNewPostImage(undefined); }}
-            className="bg-brand-dark text-brand-yellow px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-ultra shadow-xl hover:scale-105 transition-all disabled:opacity-30"
-          >Publicar (+5 C)</button>
+            disabled={(!newPostText.trim() && !newPostImage) || isPosting}
+            onClick={handlePostSubmit}
+            className="bg-brand-dark text-brand-yellow px-10 py-3 rounded-xl text-[10px] font-black uppercase tracking-ultra shadow-xl hover:scale-105 transition-all disabled:opacity-30 disabled:cursor-wait"
+          >
+            {isPosting ? 'PUBLICANDO...' : 'PUBLICAR (+5 C)'}
+          </button>
         </div>
       </div>
 
@@ -1454,7 +1463,12 @@ const App: React.FC = () => {
   
   const handleUpdateProfile = async (userId: string, updatedData: Partial<User>) => {
     const { error } = await supabase.from('profiles').update(updatedData).eq('id', userId);
-    if (!error) setProfile(prev => prev ? { ...prev, ...updatedData } : null);
+    if (!error) {
+      setUsers(prev => prev.map(u => u.id === userId ? { ...u, ...updatedData } : u));
+      if(profile && profile.id === userId) {
+        setProfile(prev => prev ? { ...prev, ...updatedData } : null);
+      }
+    }
   };
 
   const handleSendMessage = async (receiverId: string, text: string, taskId?: string) => {
@@ -1480,9 +1494,40 @@ const App: React.FC = () => {
     await awardCoins(post.userId, 3);
   };
 
-  const handlePost = async (content: string, image?: string) => {
+  const handlePost = async (content: string, imageFile?: File) => {
     if (!profile) return;
-    const newPost = { userId: profile.id, userName: profile.name, userAvatar: profile.avatarUrl, content, imageUrl: image };
+
+    let imageUrl: string | undefined = undefined;
+
+    if (imageFile) {
+      const fileExt = imageFile.name.split('.').pop();
+      const fileName = `${profile.id}-${Date.now()}.${fileExt}`;
+      const filePath = `${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('community-posts')
+        .upload(filePath, imageFile);
+
+      if (uploadError) {
+        console.error('Error uploading post image:', uploadError.message);
+        alert(`Erro ao enviar imagem: ${uploadError.message}`);
+        return;
+      }
+
+      const { data } = supabase.storage
+        .from('community-posts')
+        .getPublicUrl(filePath);
+      
+      imageUrl = data.publicUrl;
+    }
+
+    const newPost = { 
+        userId: profile.id, 
+        userName: profile.name, 
+        userAvatar: profile.avatarUrl, 
+        content, 
+        imageUrl: imageUrl 
+    };
     await supabase.from('community_posts').insert(newPost);
     await awardCoins(profile.id, 5);
   };
@@ -1711,6 +1756,7 @@ const ProfileView: React.FC<{
   onUpdateProfile: (userId: string, updatedData: Partial<User>) => void; 
 }> = ({ user, posts, submissions, onUpdateProfile }) => {
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [formData, setFormData] = useState({ name: user.name, email: user.email, phone: user.phone || '', bio: user.bio || '', avatarUrl: user.avatarUrl });
   const avatarInputRef = useRef<HTMLInputElement>(null);
 
@@ -1722,13 +1768,39 @@ const ProfileView: React.FC<{
     setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        setFormData(prev => ({ ...prev, avatarUrl: event.target?.result as string }));
-      };
-      reader.readAsDataURL(e.target.files[0]);
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) {
+      return;
+    }
+
+    const file = e.target.files[0];
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${user.id}.${fileExt}`;
+
+    setIsUploading(true);
+    try {
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      const { data } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+      
+      const publicUrlWithCacheBuster = `${data.publicUrl}?t=${new Date().getTime()}`;
+      setFormData(prev => ({ ...prev, avatarUrl: publicUrlWithCacheBuster }));
+
+    } catch (error) {
+      if (error instanceof Error) {
+        console.error('Error uploading avatar:', error.message);
+        alert(`Erro ao enviar foto: ${error.message}`);
+      }
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -1751,8 +1823,12 @@ const ProfileView: React.FC<{
               <div className="w-32 h-32 rounded-[3.5rem] bg-slate-100 flex items-center justify-center font-black overflow-hidden shadow-inner">
                 {formData.avatarUrl ? <img src={formData.avatarUrl} className="w-full h-full object-cover" alt="" /> : <ICONS.User className="w-12 h-12 text-slate-300" />}
               </div>
-              <button type="button" onClick={() => avatarInputRef.current?.click()} className="absolute -bottom-2 -right-2 p-3 bg-brand-dark text-brand-yellow rounded-full shadow-lg hover:scale-110 transition-transform">
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+              <button type="button" onClick={() => avatarInputRef.current?.click()} disabled={isUploading} className="absolute -bottom-2 -right-2 p-3 bg-brand-dark text-brand-yellow rounded-full shadow-lg hover:scale-110 transition-transform disabled:opacity-50 disabled:cursor-wait">
+                {isUploading ? (
+                  <div className="w-4 h-4 border-2 border-dashed border-white rounded-full animate-spin"></div>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                )}
               </button>
               <input type="file" ref={avatarInputRef} onChange={handleAvatarChange} accept="image/*" className="hidden" />
             </div>
@@ -1779,7 +1855,9 @@ const ProfileView: React.FC<{
           </div>
           <div className="flex justify-end gap-4 pt-6 border-t border-slate-100">
             <button type="button" onClick={() => setIsEditing(false)} className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-ultra bg-slate-100 hover:bg-slate-200 transition-colors">Cancelar</button>
-            <button type="submit" className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-ultra bg-brand-dark text-brand-yellow hover:scale-105 transition-transform">Salvar Alterações</button>
+            <button type="submit" disabled={isUploading} className="px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-ultra bg-brand-dark text-brand-yellow hover:scale-105 transition-transform disabled:opacity-50">
+              {isUploading ? 'AGUARDE...' : 'Salvar Alterações'}
+            </button>
           </div>
         </form>
       ) : (
